@@ -3,7 +3,73 @@
 #include <time.h>
 #include <string>
 #include <string.h>
+#include <iostream>
 #include "cgp.h"
+
+bool CGP::loadImage(std::string const& filename)
+{
+	_image = cv::imread(filename, CV_LOAD_IMAGE_GRAYSCALE);
+	
+	if (!_image.data)
+		return false;
+
+	_filteredImage = cv::Mat(_image.rows, _image.cols, CV_8UC1);
+
+	return true;
+}
+
+void CGP::runEvolution()
+{
+	for (uint32 y = 1; y < _image.rows-1; ++y)
+	{
+		for (uint32 x = 1; x < _image.cols-1; ++x)
+		{
+			uint8 kernel[9];
+			_get3x3Kernel(x, y, kernel);
+			_filteredImage.at<uint8>(y, x) = _filter(kernel);
+		}
+	}
+}
+
+void CGP::_get3x3Kernel(uint32 const& x, uint32 const y, uint8* kernel)
+{
+	kernel[0] = _image.at<uint8>(y - 1, x - 1);
+	kernel[1] = _image.at<uint8>(y - 1, x );
+	kernel[2] = _image.at<uint8>(y - 1, x + 1);
+
+	kernel[3] = _image.at<uint8>(y, x - 1);
+	kernel[4] = _image.at<uint8>(y, x);
+	kernel[5] = _image.at<uint8>(y, x + 1);
+
+	kernel[6] = _image.at<uint8>(y + 1, x - 1);
+	kernel[7] = _image.at<uint8>(y + 1, x);
+	kernel[8] = _image.at<uint8>(y + 1, x + 1);
+}
+
+uint8 CGP::_filter(uint8* kernel)
+{
+	return kernel[4];
+}
+
+void CGP::displayFilteredImage()
+{
+	cv::imshow("Filtered image", _filteredImage);
+	cv::waitKey(0);
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 typedef int *chromozom;                //dynamicke pole int, velikost dana m*n*(vstupu bloku+vystupu bloku) + vystupu komb
 chromozom *populace[POPULACE_MAX];   //pole ukazatelu na chromozomy jedincu populace
@@ -232,7 +298,7 @@ inline void mutace(chromozom p_chrom) {
 //-----------------------------------------------------------------------
 // MAIN
 //-----------------------------------------------------------------------
-int main(int argc, char* argv[])
+int oldmain(int argc, char* argv[])
 {
     using namespace std;
 
@@ -252,7 +318,7 @@ int main(int argc, char* argv[])
     vystupy = new int [maxidx_out+param_out];
     pouzite = new int [maxidx_out];
 
-    init_data(data); //inicializace dat
+    // init_data(data); //inicializace dat
 
     srand((unsigned) time(NULL)); //inicializace pseudonahodneho generatoru
 
@@ -456,7 +522,7 @@ int main(int argc, char* argv[])
         if (bestfit == maxfitness) {
             strcpy(fn, logfname2.c_str()); strcat(fn,".chr");
             FILE *chrfil = fopen(fn,"wb");
-            fprintf(chrfil, POPIS);
+//            fprintf(chrfil, POPIS);
             print_chrom(chrfil, (chromozom)populace[bestfit_idx]);
             fclose(chrfil);
         }
@@ -468,4 +534,37 @@ int main(int argc, char* argv[])
         delete[] populace[i];
     printf("Successful runs: %d/%d (%5.1f%%)",run_succ, PARAM_RUNS, 100*run_succ/(float)PARAM_RUNS);
     return 0;
+}
+
+int main(int32 argc, char** argv)
+{
+	std::string filename;
+	for (int32 i = 1; i < argc; ++i)
+	{
+		// input dataset
+		if (std::string(argv[i]) == "-in" && i + 1 < argc) {
+			filename = argv[++i];
+		}
+	}
+
+	if (filename.empty())
+	{
+		std::cerr << "Unspecified input." << std::endl;
+		return EXIT_FAILURE;
+	}
+
+	CGP cgp;
+
+	if (cgp.loadImage(filename))
+	{
+		cgp.runEvolution();
+		cgp.displayFilteredImage();
+	}
+	else
+	{
+		std::cerr << "Cannot load file." << std::endl;
+		return EXIT_FAILURE;
+	}
+
+	return EXIT_SUCCESS;
 }
