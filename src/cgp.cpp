@@ -125,9 +125,6 @@ namespace imcgp
 
 	void evolve_population(Population& population, std::vector<uint32>* possibleValues, uint32 const& bestFilter, uint32 const& numPopulation, uint32 const& numMutate, uint32 const& numRows, uint32 const& numCols)
 	{
-		if (bestFilter == ERROR_FILTER)
-			return;
-
 		Chromosome parent = population[bestFilter];
 
 		population[0] = parent;
@@ -141,8 +138,11 @@ namespace imcgp
 	{
 		for (uint32 i = 0; i < numCols; ++i)
 		{
-			const uint32 minidx = std::max(static_cast<uint32>(CGP_PARAM_OUTPUTS), static_cast<uint32>(numRows * (i - lback) + CGP_PARAM_INPUTS));
-			const uint32 maxidx = i * numRows + CGP_PARAM_INPUTS;
+			uint32 minidx = numRows * (i - lback) + CGP_PARAM_INPUTS;
+			if (minidx < CGP_PARAM_INPUTS)
+				minidx = CGP_PARAM_INPUTS;
+
+			uint32 maxidx = i * numRows + CGP_PARAM_INPUTS;
 
 			for (uint32 j = 0; j < CGP_PARAM_INPUTS; ++j)
 				table[i].push_back(j);
@@ -150,6 +150,22 @@ namespace imcgp
 			for (uint32 j = minidx; j < maxidx; ++j)
 				table[i].push_back(j);
 		}
+
+		#ifdef VERBOSE
+		std::cout << "Possible Values:" << std::endl;
+		std::cout << "-------------------------------" << std::endl;
+		for (uint32 i = 0; i < numCols; ++i)
+		{
+			std::cout << "Col " << i << " vals: ";
+			std::vector<uint32> colVals = table[i];
+			for (std::vector<uint32>::const_iterator it = colVals.begin(); it != colVals.end(); ++it)
+			{
+				std::cout << *it << " ";
+			}
+			std::cout << std::endl;
+		}
+		std::cout << "-------------------------------" << std::endl;
+		#endif
 	}
 
 	void create_init_population(Population& population, std::vector<uint32>* possibleValues, uint32 const& maxPopulation, uint32 const& numRows, uint32 const& numCols)
@@ -163,8 +179,8 @@ namespace imcgp
 			{
 				for (uint32 row = 0; row < numRows; ++row)
 				{
-					ch.val[j++] = possibleValues[row][rand() % possibleValues[row].size()];
-					ch.val[j++] = possibleValues[row][rand() % possibleValues[row].size()];
+					ch.val[j++] = possibleValues[col][rand() % possibleValues[col].size()];
+					ch.val[j++] = possibleValues[col][rand() % possibleValues[col].size()];
 					ch.val[j++] = rand() % NUM_FUNCTIONS;
 				}
 			}
@@ -174,36 +190,51 @@ namespace imcgp
 
 			population[i] = ch;
 		}
+
+		#ifdef VERBOSE
+		std::cout << std::endl << "Initial population:" << std::endl;
+		std::cout << "-------------------------------" << std::endl;
+		for (uint32 i = 0; i < maxPopulation; ++i)
+		{
+			Chromosome ch = population[i];
+			for (uint32 j = 0; j < CGP_CHROMOSOME_SIZE; ++j)
+			{
+				std::cout << ch.val[j];
+				if (j % 3 < 2)
+					std::cout << ",";
+				else
+					std::cout << ";";
+			}			
+			std::cout << std::endl;
+		}
+		std::cout << "-------------------------------" << std::endl;
+		#endif
 	}
 
-	Chromosome mutate(Chromosome const& parent, const std::vector<uint32>* possibleValues, const uint32 numBits, const uint32 chromosomeLength, const uint32 numRows, const uint32 numCols)
+	Chromosome mutate(Chromosome parent, const std::vector<uint32>* possibleValues, const uint32 numBits, const uint32 chromosomeLength, const uint32 numRows, const uint32 numCols)
 	{
-		Chromosome child = parent;
-
-		for (uint32 i = 0; i < numBits; ++i)
-		{
-			const uint32 maxValue = chromosomeLength - CGP_PARAM_INPUTS;
-			const uint32 rnd = rand() % maxValue;						
-			const uint32 row = rnd / numCols;
+		const uint32 numGenes = rand() % numBits + 1;
+		for (uint32 i = 0; i < numGenes; ++i)
+		{		
+			const uint32 idx = rand() % ((3 * numRows * numCols) + CGP_PARAM_OUTPUTS);
+			const uint32 col = idx / (3 * numRows);
+			const uint32 rnd = rand();
 			
 			// ouptut
-			if (rnd == maxValue - CGP_PARAM_OUTPUTS)
+			if (idx < (3 * numRows * numCols))
 			{		
-				child.val[rnd] = rand() % maxValue;
-			}
-			else
-			{
 				// input
-				if ((rnd % 3) < 2)
-					child.val[rnd] = possibleValues[row][rand() % numRows];
+				if ((idx % 3) < 2)
+					parent.val[idx] = possibleValues[col][rnd % possibleValues[col].size()];
 				// func
 				else
-					child.val[rnd] = rand() % NUM_FUNCTIONS;
+					parent.val[idx] = rand() % NUM_FUNCTIONS;				
 			}
+			else			
+				parent.val[idx] = rand() % (numCols * numRows + CGP_PARAM_INPUTS);			
 			
 		}
-
-		return child;
+		return parent;
 	}
 
 	///////////////////////////////////////////////////////////////
@@ -220,13 +251,13 @@ namespace imcgp
 			return false;
 		}
 
+		_filteredImage = cv::Mat(_inputImage.rows, _inputImage.cols, CV_8UC1);
+
 		std::vector<uint32> possibleValues[CGP_PARAM_COLS];
-		find_possible_col_values(possibleValues, CGP_PARAM_ROWS, CGP_PARAM_COLS, CGP_PARAM_LBACK);
+		find_possible_col_values(possibleValues, CGP_PARAM_ROWS, CGP_PARAM_COLS, CGP_PARAM_LBACK);		
 
 		for (uint32 r = 0; r < numRuns; ++r)
 		{
-			std::cout << "Run: " << r << " ..." << std::endl;
-
 			// generate initial population		
 			Population pop;
 			create_init_population(pop, possibleValues, numPopulation, CGP_PARAM_ROWS, CGP_PARAM_COLS);
@@ -245,12 +276,13 @@ namespace imcgp
 
 			for (uint32 gen = 0; gen < numGenerations; ++gen)
 			{
-				std::cout << "Generation " << gen << " ..." << std::endl;
+				int32 bestFilter = 0;
+				std::vector<uint32> candidates;				
 
-				int32 bestFilter = ERROR_FILTER;
 				for (uint32 ch = 0; ch < numPopulation; ++ch)
-				{
+				{					
 					// generate filtered image using chromosome evaluation
+				
 					for (uint32 y = 1; y < _inputImage.rows - 1; ++y)
 					{
 						for (uint32 x = 1; x < _inputImage.cols - 1; ++x)
@@ -264,7 +296,7 @@ namespace imcgp
 					}
 
 					// calculate fitness for the given filtered image
-					float newFitness = calc_fitness(method, _filteredImage, _referenceImage);
+					float newFitness = calc_fitness(method, _filteredImage, _referenceImage);					
 					if (newFitness == ERROR_FITNESS)
 					{
 						std::cerr << "An error occured while calculating fitness." << std::endl;
@@ -276,25 +308,44 @@ namespace imcgp
 						// min value
 						case MDPP:
 						{
-							if (newFitness <= fitness)
+							if (newFitness < fitness)
 							{
+								candidates.clear();
+								candidates.push_back(ch);
 								fitness = newFitness;
-								bestFilter = static_cast<int32>(ch);
 							}
+							else if (newFitness == fitness)						
+								candidates.push_back(ch);
+														
 							break;
 						}
 						// max value
 						case PSNR:
 						{
-							if (newFitness >= fitness)
+							if (newFitness > fitness)
 							{
+								candidates.clear();
+								candidates.push_back(ch);
 								fitness = newFitness;
-								bestFilter = static_cast<int32>(ch);
 							}
+							else if (newFitness == fitness)
+								candidates.push_back(ch);
+							
 							break;
 						}
-					}
+					}										
 				}
+
+				bestFilter = candidates[rand() % candidates.size()];
+
+				#ifdef VERBOSE
+				std::cout << std::endl << "Generation[" << gen << "]" << std::endl;				
+				std::cout << "f: " << fitness << " c: ";
+				for (std::vector<uint32>::const_iterator it = candidates.begin(); it != candidates.end(); ++it)
+					std::cout << *it << " ";
+				std::cout << "b: " << bestFilter << std::endl;				
+				std::cout << "-----------------------------" << std::endl;
+				#endif
 
 				evolve_population(pop, possibleValues, bestFilter, numPopulation, numMutate, CGP_PARAM_ROWS, CGP_PARAM_COLS);
 			}
@@ -302,48 +353,67 @@ namespace imcgp
 		return true;
 	}
 
-	bool CGPWrapper::load_image(std::string const& filename)
+	bool CGPWrapper::load_image(std::string const& filename, ImageType type)
 	{
-		_inputImage = cv::imread(filename, CV_LOAD_IMAGE_GRAYSCALE);
-
-		if (!_inputImage.data)
-			return false;
-
-		_filteredImage = cv::Mat(_inputImage.rows, _inputImage.cols, CV_8UC1);
+		switch (type)
+		{
+			case REFERENCE_IMAGE:
+			{
+				_referenceImage = cv::imread(filename, CV_LOAD_IMAGE_GRAYSCALE);
+				if (!_inputImage.data)
+					return false;
+				break;
+			}
+			case ORIGINAL_IMAGE:
+			{
+				_inputImage = cv::imread(filename, CV_LOAD_IMAGE_GRAYSCALE);
+				if (!_inputImage.data)
+					return false;
+				break;
+			}
+			default:
+				break;
+		}
+		
 
 		return true;
 	}
 
-	bool CGPWrapper::load_ref_image(std::string const& filename)
+	void CGPWrapper::display_image(ImageType type)
 	{
-		_referenceImage = cv::imread(filename, CV_LOAD_IMAGE_GRAYSCALE);
-
-		if (!_referenceImage.data)
-			return false;
-
-		return true;
-	}
-
-	void CGPWrapper::display_original_image()
-	{
-		cv::imshow("Original image", _inputImage);
+		switch (type)
+		{
+			case REFERENCE_IMAGE:
+				cv::imshow("Reference image", _referenceImage);			
+				break;
+			case FILTERED_IMAGE:
+				cv::imshow("Filtered image", _filteredImage);
+				break;
+			case ORIGINAL_IMAGE:
+				cv::imshow("Original image", _inputImage);
+				break;
+			default:
+				break;
+		}		
 		cv::waitKey(0);
 	}
-
-	void CGPWrapper::display_filtered_image()
+	
+	void CGPWrapper::save_image(std::string const& filename, ImageType type)
 	{
-		cv::imshow("Filtered image", _filteredImage);
-		cv::waitKey(0);
-	}
-
-	void CGPWrapper::save_filtered_image(std::string const& filename)
-	{
-		cv::imwrite(filename, _filteredImage);
-	}
-
-	void CGPWrapper::save_original_image(std::string const& filename)
-	{
-		cv::imwrite(filename, _inputImage);
+		switch (type)
+		{
+			case REFERENCE_IMAGE:
+				cv::imwrite(filename, _referenceImage);
+				break;
+			case FILTERED_IMAGE:
+				cv::imwrite(filename, _filteredImage);
+				break;
+			case ORIGINAL_IMAGE:
+				cv::imwrite(filename, _inputImage);
+				break;
+			default:
+				break;
+		}		
 	}
 
 } // namespace CGP

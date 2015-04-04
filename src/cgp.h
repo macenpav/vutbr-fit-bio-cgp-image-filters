@@ -10,6 +10,8 @@
 #include <opencv2/features2d/features2d.hpp>
 #include <opencv2/nonfree/features2d.hpp>
 
+#define VERBOSE
+
 ///////////////////////////////////////////////////////////////
 // Typedefs
 ///////////////////////////////////////////////////////////////
@@ -42,36 +44,45 @@ typedef int int32;
 #define CGP_CHROMOSOME_SIZE 109
 
 ///////////////////////////////////////////////////////////////
-// Enums
-///////////////////////////////////////////////////////////////
-
-enum Function
-{
-	FUNC_CONST,		///< 255
-	FUNC_IDENTITY,	///< in1
-	FUNC_INVERT,	///< 255 - in1
-	FUNC_OR,		///< in1 | in2
-	FUNC_AND,		///< in1 & in2
-	FUNC_NAND,		///< ~(in1 & in2)
-	FUNC_XOR,		///< in1 ^ in2
-	FUNC_SHR1,		///< in1 >> 1
-	FUNC_SHR2,		///< in1 >> 2
-	FUNC_SWAP,		///< in2
-	FUNC_ADD,		///< max(in1 + in2, 255)
-	FUNC_ADD_SATUR, ///< ???
-	FUNC_AVERAGE,	///< (in1 + in2) >> 1
-	FUNC_MAX,		///< max(in1, in2)
-	FUNC_MIN,		///< min(in1, in2)
-
-	NUM_FUNCTIONS	///< total number of functions
-};
-
-///////////////////////////////////////////////////////////////
 // Functions & Methods
 ///////////////////////////////////////////////////////////////
 
 namespace imcgp
 {
+	///////////////////////////////////////////////////////////////
+	// Enums
+	///////////////////////////////////////////////////////////////
+
+	enum Function
+	{
+		FUNC_CONST,		///< 255
+		FUNC_IDENTITY,	///< in1
+		FUNC_INVERT,	///< 255 - in1
+		FUNC_OR,		///< in1 | in2
+		FUNC_AND,		///< in1 & in2
+		FUNC_NAND,		///< ~(in1 & in2)
+		FUNC_XOR,		///< in1 ^ in2
+		FUNC_SHR1,		///< in1 >> 1
+		FUNC_SHR2,		///< in1 >> 2
+		FUNC_SWAP,		///< in2
+		FUNC_ADD,		///< max(in1 + in2, 255)
+		FUNC_ADD_SATUR, ///< ???
+		FUNC_AVERAGE,	///< (in1 + in2) >> 1
+		FUNC_MAX,		///< max(in1, in2)
+		FUNC_MIN,		///< min(in1, in2)
+
+		NUM_FUNCTIONS	///< total number of functions
+	};
+
+	enum ImageType
+	{
+		ORIGINAL_IMAGE,
+		REFERENCE_IMAGE,
+		FILTERED_IMAGE,
+
+		MAX_IMAGE_TYPES
+	};
+
 	/** @brief Represents a chromosome. 
 	 *
 	 * mod 0, 1 values represent inputs
@@ -172,50 +183,16 @@ namespace imcgp
 	 * @param numCols Number of CGP columns.
 	 * @return Mutated chromosome.
 	 */
-	Chromosome mutate(Chromosome const& parent, const std::vector<uint32>* possibleValues, const uint32 numBits, const uint32 chromosomeLength, const uint32 numRows, const uint32 numCols);
+	Chromosome mutate(Chromosome parent, const std::vector<uint32>* possibleValues, const uint32 numBits, const uint32 chromosomeLength, const uint32 numRows, const uint32 numCols);
 
 	class CGPWrapper
 	{
 		public:
-			/** @brief Loads reference image. 
-			 *
-			 * @param filename Filename.
-			 * @return Image loaded succesfully.
-			 */
-			bool load_ref_image(std::string const& filename);
+			bool load_image(std::string const& filename, ImageType type);
 
-			/** @brief Loads input image.
-			 *
-			 * @param filename Filename.
-			 * @return Image loaded succesfully.
-			 */
-			bool load_image(std::string const& filename);
+			void display_image(ImageType type);
 
-			/** @brief Displays an image after filtering. 
-			 *
-			 * @return Void.
-			 */
-			void display_filtered_image();
-
-			/** @brief Displays the original image.
-			 *
-			 * @return Void.
-			 */
-			void display_original_image();
-
-			/** @brief Saves the filtered image.
-			 *
-			 * @param filename Filename.
-			 * @return Void.
-			 */
-			void save_filtered_image(std::string const& filename);
-
-			/** @brief Saves the original image.
-			 *
-			 * @param filename Filename.
-			 * @return Void.
-			 */
-			void save_original_image(std::string const& filename);
+			void save_image(std::string const& filename, ImageType type);
 
 			/** @brief Runs the whole thing. 
 			 *

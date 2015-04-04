@@ -5,7 +5,7 @@
 int main(int32 argc, char** argv)
 {	
 	std::string filename, refFilename, methodname;
-	imcgp::FitnessMethod method = imcgp::MDPP;
+	imcgp::FitnessMethod method = imcgp::PSNR;
 	uint32 numRuns = 1, numMutations = 5, numGenerations = 30000, numPopulation = 5;
 	for (int32 i = 1; i < argc; ++i)
 	{
@@ -51,18 +51,19 @@ int main(int32 argc, char** argv)
 
 	imcgp::CGPWrapper cgp;
 
-	if (cgp.load_image(filename) && cgp.load_ref_image(refFilename))
-	{
+	if (cgp.load_image(filename, imcgp::ORIGINAL_IMAGE) && cgp.load_image(refFilename, imcgp::REFERENCE_IMAGE))
+	{		
 		if (cgp.run(method, numRuns, numGenerations, numPopulation, numMutations))
-		{ 
-			cgp.save_filtered_image("filered.jpg");
-			cgp.save_original_image("original.jpg");
+		{ 		
+			cgp.save_image("filtered.jpg", imcgp::FILTERED_IMAGE);
+			cgp.save_image("original.jpg", imcgp::ORIGINAL_IMAGE);
+			cgp.save_image("reference.jpg", imcgp::REFERENCE_IMAGE);
 		}
 		else
 		{
 			std::cerr << "Error occured while running evolution." << std::endl;
 			return EXIT_FAILURE;
-		}
+		}		
 	}
 	else
 	{
