@@ -2,6 +2,9 @@
 #include <cmath>
 #include <vector>
 #include <ctime>
+#include <fstream>
+#include <sstream>
+#include <iomanip>
 
 #include "cgp.h"
 
@@ -21,26 +24,26 @@ namespace imcgp
 			case MDPP:
 			{
 				fitness = 0.f;
-				for (uint32 y = 0; y < input.rows; ++y)
+				for (uint32 y = 1; y < input.rows-1; ++y)
 				{
-					for (uint32 x = 0; x < input.cols; ++x)
+					for (uint32 x = 1; x < input.cols-1; ++x)
 						fitness += std::abs(static_cast<float>(input.at<uint8>(y, x)) - static_cast<float>(reference.at<uint8>(y, x)));
 				}
-				fitness /= static_cast<float>(input.cols * input.rows);
+				fitness /= static_cast<float>((input.cols-2) * (input.rows-2));
 				break;
 			}
 			case PSNR:
 			{
 				float tmp = 0.f;
-				for (uint32 y = 0; y < input.rows; ++y)
+				for (uint32 y = 1; y < input.rows-1; ++y)
 				{
-					for (uint32 x = 0; x < input.cols; ++x)
+					for (uint32 x = 1; x < input.cols-1; ++x)
 					{
 						float a = static_cast<float>(input.at<uint8>(y, x)) - static_cast<float>(reference.at<uint8>(y, x));
 						tmp += (a * a);
 					}
 				}
-				tmp /= (input.cols * input.rows);
+				tmp /= ((input.cols-2) * (input.rows-2));
 				fitness = 10.f * std::log10(255.f * 255.f / tmp);
 				break;
 			}
@@ -151,7 +154,7 @@ namespace imcgp
 				table[i].push_back(j);
 		}
 
-		#ifdef VERBOSE
+		#ifdef DEBUG
 		std::cout << "Possible Values:" << std::endl;
 		std::cout << "-------------------------------" << std::endl;
 		for (uint32 i = 0; i < numCols; ++i)
@@ -191,7 +194,7 @@ namespace imcgp
 			population[i] = ch;
 		}
 
-		#ifdef VERBOSE
+		#ifdef DEBUG
 		std::cout << std::endl << "Initial population:" << std::endl;
 		std::cout << "-------------------------------" << std::endl;
 		for (uint32 i = 0; i < maxPopulation; ++i)
@@ -258,9 +261,24 @@ namespace imcgp
 
 		for (uint32 r = 0; r < numRuns; ++r)
 		{
-			// generate initial population		
+			if (_options & OPT_MEASURE)
+			{
+				_stats.average_gen_time = 0.0;
+				_stats.total_time = 0.0;
+			}
+
+			// generate initial population					
+			auto t1 = std::chrono::high_resolution_clock::now();
 			Population pop;
 			create_init_population(pop, possibleValues, numPopulation, CGP_PARAM_ROWS, CGP_PARAM_COLS);
+			auto t2 = std::chrono::high_resolution_clock::now();
+
+			if (_options & OPT_VERBOSE)
+			{
+				std::chrono::duration<double> time = t2 - t1;
+				std::cout << "Timer init: " << time.count() << "s" << std::endl;
+			}
+
 			float fitness;
 			switch (method)
 			{
@@ -276,6 +294,13 @@ namespace imcgp
 
 			for (uint32 gen = 0; gen < numGenerations; ++gen)
 			{
+				if (_options & OPT_VERBOSE)
+				{
+					std::cout << "Generation [" << gen << "]:" << std::endl;
+					std::cout << "----------------------------" << std::endl;
+				}
+				auto t3 = std::chrono::high_resolution_clock::now();
+
 				int32 bestFilter = 0;
 				std::vector<uint32> candidates;				
 
@@ -338,19 +363,103 @@ namespace imcgp
 
 				bestFilter = candidates[rand() % candidates.size()];
 
-				#ifdef VERBOSE
-				std::cout << std::endl << "Generation[" << gen << "]" << std::endl;				
-				std::cout << "f: " << fitness << " c: ";
-				for (std::vector<uint32>::const_iterator it = candidates.begin(); it != candidates.end(); ++it)
-					std::cout << *it << " ";
-				std::cout << "b: " << bestFilter << std::endl;				
-				std::cout << "-----------------------------" << std::endl;
-				#endif
+				if (_options & OPT_VERBOSE)
+				{
+					std::cout << "fitness: " << fitness << std::endl;
+					std::cout << "candidates: ";
+					for (std::vector<uint32>::const_iterator it = candidates.begin(); it != candidates.end(); ++it)
+						std::cout << *it << " ";
+					std::cout << " (best: " << bestFilter << ")" << std::endl;
+				}
 
 				evolve_population(pop, possibleValues, bestFilter, numPopulation, numMutate, CGP_PARAM_ROWS, CGP_PARAM_COLS);
+
+				auto t4 = std::chrono::high_resolution_clock::now();
+				std::chrono::duration<double> time = t4 - t3;
+				
+				if (_options & OPT_VERBOSE)
+				{					
+					std::cout << "Time: " << time.count() << "s" << std::endl;					
+					std::cout << "----------- END ------------" << std::endl;	
+				}
+
+				if (_options & OPT_MEASURE)				
+					_stats.average_gen_time += time.count();				
 			}
+			auto t5 = std::chrono::high_resolution_clock::now();
+			std::chrono::duration<double> time = t5 - t1;
+
+			if (_options & OPT_VERBOSE)
+				std::cout << "Total time: " << time.count() << "s" << std::endl;
+
+			if (_options & OPT_MEASURE)
+			{	
+				
+				std::time_t t = std::time(NULL);
+				
+				_stats.total_time = time.count();
+				_stats.average_gen_time /= static_cast<double>(numGenerations);
+				_stats.fitness = fitness;
+				_stats.best_filter = pop[0];
+				_stats.num_generations = numGenerations;
+				_stats.num_genes_mutated = numMutate;
+				_stats.population_size = numPopulation;
+				_stats.method = method;
+				
+				auto now = std::time(nullptr);
+				auto tm = *std::localtime(&now);
+				std::stringstream ss;
+				ss << std::put_time(&tm, "%d-%m-%Y %H-%M-%S");
+				std::string date = ss.str();
+
+				write_stats("stats (" + date + ").txt");
+				save_image("filtered (" + date + ").jpg", FILTERED_IMAGE);
+				save_image("original (" + date + ").jpg", ORIGINAL_IMAGE);
+				save_image("reference (" + date + ").jpg", REFERENCE_IMAGE);
+			}			
 		}
 		return true;
+	}
+
+	void CGPWrapper::write_stats(std::string const& filename)
+	{
+		std::ofstream myfile;
+		myfile.open(filename);
+
+		myfile << "Total time: " << _stats.total_time << std::endl;
+		myfile << "Average gen. time: " << _stats.average_gen_time << std::endl;
+		myfile << "Fitness method: ";
+		switch (_stats.method)
+		{
+			case PSNR:
+				myfile << "PSNR";
+				break;
+			case MDPP:
+				myfile << "MDPP";
+				break;
+		}
+		myfile << std::endl;
+		myfile << "Fitness: " << _stats.fitness << std::endl;
+		myfile << "Best filter: ";
+
+		for (uint32 i = 0; i < CGP_CHROMOSOME_SIZE; ++i)
+		{
+			myfile << _stats.best_filter.val[i];
+			if (i != CGP_CHROMOSOME_SIZE - 1)
+			{
+				if (i % 3 < 2)
+					myfile << ",";
+				else
+					myfile << ";";
+			}			
+		}
+		myfile << std::endl;
+		myfile << "Number of generations: " << _stats.num_generations << std::endl;
+		myfile << "Max. genes mutated: " << _stats.num_genes_mutated << std::endl;
+		myfile << "Population size: " << _stats.population_size << std::endl;
+		
+
+		myfile.close();
 	}
 
 	bool CGPWrapper::load_image(std::string const& filename, ImageType type)
@@ -414,6 +523,11 @@ namespace imcgp
 			default:
 				break;
 		}		
+	}
+
+	void CGPWrapper::set_options(uint32 const& opts)
+	{
+		_options = opts;
 	}
 
 } // namespace CGP

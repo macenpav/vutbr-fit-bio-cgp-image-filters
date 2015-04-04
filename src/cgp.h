@@ -3,6 +3,7 @@
 
 #include <string>
 #include <vector>
+#include <chrono>
 
 #include <opencv2/core/core.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
@@ -10,7 +11,7 @@
 #include <opencv2/features2d/features2d.hpp>
 #include <opencv2/nonfree/features2d.hpp>
 
-#define VERBOSE
+#define DEBUG ///< debug mode
 
 ///////////////////////////////////////////////////////////////
 // Typedefs
@@ -52,6 +53,12 @@ namespace imcgp
 	///////////////////////////////////////////////////////////////
 	// Enums
 	///////////////////////////////////////////////////////////////
+
+	enum Options
+	{
+		OPT_VERBOSE = 0x00000001,
+		OPT_MEASURE = 0x00000002
+	};
 
 	enum Function
 	{
@@ -95,7 +102,7 @@ namespace imcgp
 	};
 
 	/** @brief An array of chromosomes, representing a population. */
-	typedef std::vector<Chromosome> Population;
+	typedef std::vector<Chromosome> Population;	
 
 	const float ERROR_FITNESS = -1.f;	///< Fitness error.
 	const int32 ERROR_FILTER = -1;		///< Filter error.
@@ -108,6 +115,16 @@ namespace imcgp
 		SCORE,
 
 		NUM_FITNESS_METHODS
+	};
+
+	struct Statistics
+	{
+		Chromosome best_filter;
+		float fitness;
+		double total_time, average_gen_time;
+		Population initial_population;
+		uint32 num_generations, num_genes_mutated, population_size;
+		FitnessMethod method;
 	};
 
 	/** @brief Calculates fitness.
@@ -194,6 +211,10 @@ namespace imcgp
 
 			void save_image(std::string const& filename, ImageType type);
 
+			void set_options(uint32 const& opts);
+
+			void write_stats(std::string const& filename);
+
 			/** @brief Runs the whole thing. 
 			 *
 			 * @param method Fitness method used to compare input and reference image.
@@ -216,7 +237,9 @@ namespace imcgp
 			cv::Mat _filteredImage;
 
 			/** @brief Options. */
-			uint32 _opt;			
+			uint32 _options;		
+
+			Statistics _stats;
 	};
 
 }
