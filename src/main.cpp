@@ -1,6 +1,6 @@
 #include <iostream>
 
-#include "cgp.h"
+#include "cgp.cuh"
 
 int main(int32 argc, char** argv)
 {	
@@ -50,6 +50,10 @@ int main(int32 argc, char** argv)
 		if (std::string(argv[i]) == "-m") {
 			opts |= imcgp::OPT_MEASURE;
 		}
+
+        if (std::string(argv[i]) == "-cuda") {
+            opts |= imcgp::OPT_CUDA_ACCELERATION;
+        }
 	}
 
 	if (filename.empty())

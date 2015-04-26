@@ -1,12 +1,12 @@
 #include <iostream>
-#include <cmath>
 #include <vector>
 #include <ctime>
 #include <fstream>
 #include <sstream>
 #include <iomanip>
 
-#include "cgp.h"
+#include "cgp.cuh"
+#include "cgp_cuda.cuh"
 
 namespace imcgp
 { 
@@ -255,6 +255,14 @@ namespace imcgp
 		}
 
 		_filteredImage = cv::Mat(_inputImage.rows, _inputImage.cols, CV_8UC1);
+        
+        if (_options & OPT_CUDA_ACCELERATION)
+        {
+            GPU_CHECK_ERROR(cudaMalloc((void**)&_cudaInputImage, _inputImage.rows * _inputImage.cols * sizeof(uint8)));
+            GPU_CHECK_ERROR(cudaMalloc((void**)&_cudaFilteredImage, _inputImage.rows * _inputImage.cols * sizeof(uint8)));
+            GPU_CHECK_ERROR(cudaMalloc((void**)&_cudaFitness, sizeof(float)));
+            GPU_CHECK_ERROR(cudaMemcpy(_cudaInputImage, _inputImage.data, _inputImage.cols * _inputImage.rows * sizeof(uint8), cudaMemcpyHostToDevice));
+        }
 
 		std::vector<uint32> possibleValues[CGP_PARAM_COLS];
 		find_possible_col_values(possibleValues, CGP_PARAM_ROWS, CGP_PARAM_COLS, CGP_PARAM_LBACK);		
@@ -302,31 +310,75 @@ namespace imcgp
 				auto t3 = std::chrono::high_resolution_clock::now();
 
 				int32 bestFilter = 0;
-				std::vector<uint32> candidates;				
+				std::vector<uint32> candidates;		
+                Chromosome* cuda_pop;
+
+                if (_options & OPT_CUDA_ACCELERATION)
+                {
+                    GPU_CHECK_ERROR(cudaMalloc((void**)&cuda_pop, sizeof(Chromosome) * numPopulation));
+                    GPU_CHECK_ERROR(cudaMemcpy(cuda_pop, &pop[0], sizeof(Chromosome) * numPopulation, cudaMemcpyHostToDevice));
+                }
 
 				for (uint32 ch = 0; ch < numPopulation; ++ch)
 				{					
 					// generate filtered image using chromosome evaluation
 				
-					for (uint32 y = 1; y < _inputImage.rows - 1; ++y)
-					{
-						for (uint32 x = 1; x < _inputImage.cols - 1; ++x)
-						{
-							// get image kernel and copy it to outputs
-							uint8 kernel[9];
-							get_3x3_kernel(kernel, _inputImage, x, y);
+                    if (_options & OPT_CUDA_ACCELERATION)
+                    {
+                        dim3 block(16, 16);
+                        dim3 grid(64, 64);                        
 
-							_filteredImage.at<uint8>(y, x) = eval_chromosome(pop[ch], kernel, CGP_PARAM_ROWS, CGP_PARAM_COLS);
-						}
-					}
+                        cuda::filter_image<<<grid, block>>>(_cudaInputImage, _cudaFilteredImage, &cuda_pop[ch], _inputImage.cols, _inputImage.rows);
+
+                        GPU_CHECK_ERROR(cudaMemcpy(_filteredImage.data, _cudaFilteredImage, _filteredImage.cols * _filteredImage.rows * sizeof(uint8), cudaMemcpyDeviceToHost));
+                    }
+                    else
+                    {
+                        for (uint32 y = 1; y < _inputImage.rows - 1; ++y)
+                        {
+                            for (uint32 x = 1; x < _inputImage.cols - 1; ++x)
+                            {
+                                // get image kernel and copy it to outputs
+                                uint8 kernel[9];
+                                get_3x3_kernel(kernel, _inputImage, x, y);
+
+                                _filteredImage.at<uint8>(y, x) = eval_chromosome(pop[ch], kernel, CGP_PARAM_ROWS, CGP_PARAM_COLS);
+                            }
+                        }
+                    }
 
 					// calculate fitness for the given filtered image
-					float newFitness = calc_fitness(method, _filteredImage, _referenceImage);					
+                    float newFitness;
+                    /*if (_options & OPT_CUDA_ACCELERATION)
+                    {                                                 
+                        dim3 block(16, 16);
+                        dim3 grid(64, 64);
+
+                        float tmp = 0.f;
+                        cudaMemcpy(&tmp, _cudaFitness, sizeof(float), cudaMemcpyHostToDevice);                        
+                        cuda::calc_fitness_add<<<grid, block>>>(_cudaFitness, method, _cudaInputImage, _cudaFilteredImage, _inputImage.cols, _inputImage.rows);
+                        GPU_CHECK_ERROR(cudaMemcpy(&newFitness, _cudaFitness, sizeof(float), cudaMemcpyDeviceToHost));
+
+                        switch (method)
+                        {
+                            case MDPP:
+                                newFitness /= (static_cast<float>((_inputImage.cols - 2) * (_inputImage.rows - 2)));
+                                break;
+                            case PSNR:
+                                newFitness /= (static_cast<float>((_inputImage.cols - 2) * (_inputImage.rows - 2)));
+                                newFitness = 10.f * std::log10(255.f * 255.f / tmp);
+                                break;
+                        }
+                    }
+                    else                    */
+                        newFitness = calc_fitness(method, _filteredImage, _referenceImage);                    
+					
 					if (newFitness == ERROR_FITNESS)
 					{
 						std::cerr << "An error occured while calculating fitness." << std::endl;
 						return false;
 					}
+                
 
 					switch (method)
 					{
@@ -360,6 +412,11 @@ namespace imcgp
 						}
 					}										
 				}
+
+                if (_options & OPT_CUDA_ACCELERATION)
+                {
+                    cudaFree(cuda_pop);
+                }
 
 				bestFilter = candidates[rand() % candidates.size()];
 
@@ -418,6 +475,14 @@ namespace imcgp
 				save_image("reference (" + date + ").jpg", REFERENCE_IMAGE);
 			}			
 		}
+
+        if (_options & OPT_CUDA_ACCELERATION)
+        {
+            GPU_CHECK_ERROR(cudaFree(_cudaInputImage));
+            GPU_CHECK_ERROR(cudaFree(_cudaFilteredImage));
+            GPU_CHECK_ERROR(cudaFree(_cudaFitness));
+        }
+
 		return true;
 	}
 
