@@ -1,3 +1,11 @@
+/**
+ * @file cgp.cuh
+ * @brief CGP implementation.
+ *
+ * The CGP wrapper and the CPU implementation are held here.
+ *
+ * @author Pavel Macenauer <macenauer.p@gmail.com>
+ */
 #ifndef H_CGP
 #define H_CGP
 
@@ -14,9 +22,13 @@
 #include "cuda_runtime.h"
 #include "cgp_enums.h"
 
+// Uncomment this to show some additional debugging outputs
 // #define DEBUG ///< debug mode
 
+/** @brief GPU assert call wrapper. */
 #define GPU_CHECK_ERROR(ans) { gpuAssert((ans), __FILE__, __LINE__); }
+
+/** @brief Assert function for GPU calls. */
 inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort = true)
 {
     if (code != cudaSuccess)
@@ -26,6 +38,7 @@ inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort =
     }
 }
 
+/// Image CGP wrapper.
 namespace imcgp
 {
 
@@ -48,6 +61,16 @@ namespace imcgp
 	 */
 	void get_3x3_kernel(uint8* kernel, cv::Mat const& input, uint32 const& x, uint32 const& y);	
 
+    /** @brief Fills an array with an image kernel.
+     *
+     * @param kernel Input array.
+     * @param input Input image.
+     * @param x X-coordinate.
+     * @param y Y-coordinate.
+     * @return Void.
+     */   
+    void get_5x5_kernel(uint8* kernel, cv::Mat const& input, uint32 const& x, uint32 const& y);
+
 	/** @brief Evaluates a chromosome. 
 	 *
 	 * @brief chromosome Passed chromosome.
@@ -56,7 +79,7 @@ namespace imcgp
 	 * @brief numCols Number of CGP columns.
 	 * @return Pixel value.
 	 */
-	uint8 eval_chromosome(Chromosome const& chromosome, uint8* inputs, uint32 const& numRows, uint32 const& numCols);
+    uint8 eval_chromosome(Chromosome const& chromosome, uint8* inputs, uint32 const& numRows, uint32 const& numCols, uint32 const& numInputs);
 
 	/** @brief Evolves a population. 
 	 *
@@ -69,7 +92,7 @@ namespace imcgp
 	 * @param numCols Number of CGP columns.
 	 * @return Void.
 	 */
-	void evolve_population(Population& population, std::vector<uint32>* possibleValues, uint32 const& bestFilter, uint32 const& numPopulation, uint32 const& numMutate, uint32 const& numRows, uint32 const& numCols);
+    void evolve_population(Population& population, std::vector<uint32>* possibleValues, uint32 const& bestFilter, uint32 const& numPopulation, uint32 const& numMutate, uint32 const& numRows, uint32 const& numCols, uint32 const& numInputs);
 
 	/** @brief Fills a table of possible values for every row. 
 	 *
@@ -79,7 +102,7 @@ namespace imcgp
 	 * @param lback L-back parameter - how far the connected rows can be from each other.
 	 * @return Void.
 	 */
-	void find_possible_col_values(std::vector<uint32>* table, uint32 const& numRows, uint32 const& numCols, uint32 const& lback);
+    void find_possible_col_values(std::vector<uint32>* table, uint32 const& numRows, uint32 const& numCols, uint32 const& lback, uint32 const& numInputs);
 
 	/** @brief Creates an initial population. 
 	 *
@@ -90,31 +113,55 @@ namespace imcgp
 	 * @param numCols Number of CGP columns.
 	 * @return Void.
 	 */
-	void create_init_population(Population& population, std::vector<uint32>* possibleValues, uint32 const& maxPopulation, uint32 const& numRows, uint32 const& numCols);
+    void create_init_population(Population& population, std::vector<uint32>* possibleValues, uint32 const& maxPopulation, uint32 const& numRows, uint32 const& numCols, uint32 const& numInputs);
 
-	/** @brief Mutates a chromosome. 
-	 * 
-	 * @param parent Parent chromosome to mutate from.
-	 * @param possibleValues Possible values to assign for every row.
-	 * @param numBits Number of bits to mutate.
-	 * @param chromosomeLength Length of the chromosome.
-	 * @param numRows Number of CGP rows.
-	 * @param numCols Number of CGP columns.
-	 * @return Mutated chromosome.
-	 */
-	Chromosome mutate(Chromosome parent, const std::vector<uint32>* possibleValues, const uint32 numBits, const uint32 chromosomeLength, const uint32 numRows, const uint32 numCols);
+    /** @brief Mutates a chromosome.
+     *
+     * @param parent Parent chromosome to mutate from.
+     * @param possibleValues Possible values to assign for every row.
+     * @param numBits Number of bits to mutate.
+     * @param chromosomeLength Length of the chromosome.
+     * @param numRows Number of CGP rows.
+     * @param numCols Number of CGP columns.
+     * @return Mutated chromosome.
+     */
+    Chromosome mutate(Chromosome parent, const std::vector<uint32>* possibleValues, uint32 const& numBits, uint32 const& chromosomeLength, uint32 const& numRows, uint32 const& numCols, uint32 const& numInputs);
 
+    /** @brief A class to simplify CGP handling. */
 	class CGPWrapper
 	{
 		public:
+            /** @brief Loads an image. 
+             *
+             * @param filename      Name of the file.
+             * @param type          Type of the file to load (ORIGINAL_IMAGE, REFERENCE_IMAGE)
+             * @return Successfully loaded the file.
+             */
 			bool load_image(std::string const& filename, ImageType type);
 
+            /** @brief Displays an image. 
+             * 
+             * @param type Type of the file to load (ORIGINAL_IMAGE, REFERENCE_IMAGE, FILTERED_IMAGE) 
+             */
 			void display_image(ImageType type);
 
+            /** @brief Saves an image to a file.
+             *
+             * @param filename  Name of the file.
+             * @param type      Type of the file to load (ORIGINAL_IMAGE, REFERENCE_IMAGE, FILTERED_IMAGE)            
+             */
 			void save_image(std::string const& filename, ImageType type);
 
+            /** @brief Passes run options.
+             *
+             * @param opts Passed options (a bit array).
+             */
 			void set_options(uint32 const& opts);
 
+            /** @brief Writes run stats to a file.
+             *
+             * @param filename Name of the file.
+             */
 			void write_stats(std::string const& filename);
 
 			/** @brief Runs the whole thing. 
@@ -126,7 +173,7 @@ namespace imcgp
 			 * @param numMutate Number of mutated genes in a chromosome.
 			 * @return Succesful run.
 			 */
-			bool run(FitnessMethod method, uint32 const& numRuns, uint32 const& numGenerations, uint32 const& numPopulation, uint32 const& numMutate);
+			bool run(FitnessMethod method, uint32 const& numRuns, uint32 const& numGenerations, uint32 const& numPopulation, uint32 const& numMutate, uint32 const& numInputs);
 
 		private:		
 			/** @brief Input image. */
@@ -137,16 +184,17 @@ namespace imcgp
 
 			/** @brief Output image. */
 			cv::Mat _filteredImage;
-
+            
+            /** @brief Input image in GPU memory. */
             uint8* _cudaInputImage;
 
-            uint8* _cudaFilteredImage;
-
-            float* _cudaFitness;
+            /** @brief Output image in GPU memory. */
+            uint8* _cudaFilteredImage;            
 
 			/** @brief Options. */
 			uint32 _options;		
 
+            /** @brief Run statistics */
 			Statistics _stats;
 	};
 

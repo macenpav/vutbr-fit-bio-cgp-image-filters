@@ -1,3 +1,12 @@
+/**
+ * @file cgp_enums.h
+ * @brief CGP structures.
+ *
+ * Used structures are held here.
+ *
+ * @author Pavel Macenauer <macenauer.p@gmail.com>
+ */
+
 #ifndef H_CGP_ENUMS
 #define H_CGP_ENUMS
 
@@ -27,13 +36,17 @@ typedef std::chrono::duration<double, std::ratio<1, 1000000000>> Ticks;
 /** @brief Number of CGP columns. */
 #define CGP_PARAM_COLS 6
 /** @brief Number of inputs. Should be 9 because of a 3x3 image kernel. */
-#define CGP_PARAM_INPUTS 9
+#define CGP_PARAM_INPUTS_3X3 9
+/** @brief Number of inputs. Should be 25 because of a 5x5 image kernel. */
+#define CGP_PARAM_INPUTS_5X5 25
 /** @brief Number of outputs. Should be 1 because of a single pixel output. */
 #define CGP_PARAM_OUTPUTS 1
 /** @brief Distance between columns, we can choose candidates from. */
 #define CGP_PARAM_LBACK 1
 /** @brief inputs + rows*cols + ouputs */
-#define CGP_PARAM_TOTAL 46
+#define CGP_PARAM_TOTAL_3X3 46
+/** @brief inputs + rows*cols + ouputs */
+#define CGP_PARAM_TOTAL_5X5 62
 /** @brief rows * cols * (func_inputs + 1) + outputs */
 #define CGP_CHROMOSOME_SIZE 109
 
@@ -41,12 +54,14 @@ typedef std::chrono::duration<double, std::ratio<1, 1000000000>> Ticks;
 // Functions & Methods
 ///////////////////////////////////////////////////////////////
 
-namespace imcgp
+/// Image CGP wrapper.
+namespace imcgp 
 {
     ///////////////////////////////////////////////////////////////
     // Enums
     ///////////////////////////////////////////////////////////////
 
+    /** @brief Run options. */
     enum Options
     {
         OPT_VERBOSE             = 0x00000001,
@@ -55,6 +70,7 @@ namespace imcgp
         OPT_OUTPUT_CSV          = 0x00000008
     };
 
+    /** @brief Functions used to design a filter. */
     enum Function
     {
         FUNC_CONST,		///< 255
@@ -77,6 +93,7 @@ namespace imcgp
         NUM_FUNCTIONS	///< total number of functions
     };
 
+    /** @brief Types of images used. */
     enum ImageType
     {
         ORIGINAL_IMAGE,
@@ -87,11 +104,11 @@ namespace imcgp
     };
 
     /** @brief Represents a chromosome.
-    *
-    * mod 0, 1 values represent inputs
-    * mod 2 values represent function
-    * last value represents output
-    */
+     *
+     * mod 0, 1 values represent inputs
+     * mod 2 values represent function
+     * last value represents output
+     */
     struct Chromosome
     {
         uint32 val[CGP_CHROMOSOME_SIZE];
@@ -113,13 +130,14 @@ namespace imcgp
         NUM_FITNESS_METHODS
     };
 
+    /** @brief A structure to simplify saving run stats. */
     struct Statistics
     {
         Chromosome best_filter;
         float fitness;
         double total_time, average_gen_time, init_time;
         Population initial_population;
-        uint32 num_generations, num_genes_mutated, population_size;
+        uint32 num_generations, num_genes_mutated, population_size, num_inputs;
         FitnessMethod method;
     };
 }

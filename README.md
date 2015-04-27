@@ -25,16 +25,21 @@ The executable supports several configuration options:
 * -i --input [filename] Input image. (required)
 * -r --reference [filename] Reference image. (required)
 * -m --method [name] Fitness method used. Options: mdpp (default), psnr, mde
-* -R --runs [number] Number of runs.
-* -M --mutations)[number] Number of mutations inside the chromosome.
-* -g --generations [number] Number of generations.
-* -p --population [number] Population count inside a generation.
+* -R --runs [number] Number of runs (default: 1).
+* -M --mutations)[number] Number of mutations inside the chromosome (default: 5).
+* -g --generations [number] Number of generations (default: 30000).
+* -p --population [number] Population count inside a generation (default: 5).
+* -k --kernel [kernel type] Type of kernel to use. Options: 3x3 (default), 5x5
 * -v --verbose Verbose output.
 * -C --cuda Use CUDA acceleration.
 * -c --csv Output fitness values per generation inside a CSV file.
 
 ## Other information
 
+### Documentation
+Doxygen-generated documentation can be found on: <a href="http://imcgp.maciste.cz">http://imcgp.maciste.cz</a> or you can generate
+
+### Contributing
 The whole project is under construction and is only a school project, therefore there are still a lot of TODOs and a lot less spare time. If you are interested in this topic, would like to contribute or have anything else on mind, you can contact me at <a href="mailto:macenauer.p@gmail.com">macenauer.p@gmail.com</a> or via github.
 
 In case you would like to use it, feel free to do so, only add some form of an acknowledgement. I would also be happy to help, if it would lead to something useful.

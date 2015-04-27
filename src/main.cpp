@@ -4,9 +4,12 @@
 
 int main(int32 argc, char** argv)
 {	
-	std::string filename, refFilename, methodname;
-	imcgp::FitnessMethod method = imcgp::MDPP;
-	uint32 numRuns = 1, numMutations = 5, numGenerations = 30000, numPopulation = 5;
+    std::string filename, refFilename, methodname, kerneltype;
+	
+    // default values are set here
+    imcgp::FitnessMethod method = imcgp::MDPP;
+    uint32 numRuns = 1, numMutations = 5, numGenerations = 30000, numPopulation = 5, numInputs = CGP_PARAM_INPUTS_3X3;
+
 	uint32 opts = 0;
 	for (int32 i = 1; i < argc; ++i)
 	{
@@ -25,7 +28,17 @@ int main(int32 argc, char** argv)
 				method = imcgp::MDPP;
 			else if (methodname == "psnr")
 				method = imcgp::PSNR;
+            else if (methodname == "mse")
+                method = imcgp::MSE;
 		}
+
+        if ((std::string(argv[i]) == "-k" || std::string(argv[i]) == "--kernel") && i + 1 < argc) {
+            kerneltype = argv[++i];
+            if (kerneltype == "3x3")
+                numInputs = CGP_PARAM_INPUTS_3X3;
+            else if (kerneltype == "5x5")
+                numInputs = CGP_PARAM_INPUTS_5X5;
+        }
 
         if ((std::string(argv[i]) == "-R" || std::string(argv[i]) == "--runs") && i + 1 < argc) {
 			numRuns = atoi(argv[++i]);
@@ -74,7 +87,7 @@ int main(int32 argc, char** argv)
 
 	if (cgp.load_image(filename, imcgp::ORIGINAL_IMAGE) && cgp.load_image(refFilename, imcgp::REFERENCE_IMAGE))
 	{				
-		bool result = cgp.run(method, numRuns, numGenerations, numPopulation, numMutations);
+		bool result = cgp.run(method, numRuns, numGenerations, numPopulation, numMutations, numInputs);
 		if (!result)
 		{
 			std::cerr << "Error occured while running evolution." << std::endl;

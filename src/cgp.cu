@@ -83,10 +83,53 @@ namespace imcgp
 		kernel[8] = input.at<uint8>(y + 1, x + 1);
 	}
 
-	uint8 eval_chromosome(Chromosome const& chromosome, uint8* inputs, uint32 const& numRows, uint32 const& numCols)
-	{
-		uint8 outputs[CGP_PARAM_TOTAL];
-		memcpy(outputs, inputs, 9 * sizeof(uint8));
+    void get_5x5_kernel(uint8* kernel, cv::Mat const& input, uint32 const& x, uint32 const& y)
+    {
+        kernel[0] = input.at<uint8>(y - 2, x - 2);
+        kernel[1] = input.at<uint8>(y - 2, x - 1);
+        kernel[2] = input.at<uint8>(y - 2, x);
+        kernel[3] = input.at<uint8>(y - 2, x + 1);
+        kernel[4] = input.at<uint8>(y - 2, x + 2);
+
+        kernel[5] = input.at<uint8>(y - 1, x - 2);
+        kernel[6] = input.at<uint8>(y - 1, x - 1);
+        kernel[7] = input.at<uint8>(y - 1, x);
+        kernel[8] = input.at<uint8>(y - 1, x + 1);
+        kernel[9] = input.at<uint8>(y - 1, x + 2);
+
+        kernel[10] = input.at<uint8>(y, x - 2);
+        kernel[11] = input.at<uint8>(y, x - 1);
+        kernel[12] = input.at<uint8>(y, x);
+        kernel[13] = input.at<uint8>(y, x + 1);
+        kernel[14] = input.at<uint8>(y, x + 2);
+
+        kernel[15] = input.at<uint8>(y + 1, x - 2);
+        kernel[16] = input.at<uint8>(y + 1, x - 1);
+        kernel[17] = input.at<uint8>(y + 1, x);
+        kernel[18] = input.at<uint8>(y + 1, x + 1);
+        kernel[19] = input.at<uint8>(y + 1, x + 2);
+
+        kernel[20] = input.at<uint8>(y + 2, x - 2);
+        kernel[21] = input.at<uint8>(y + 2, x - 1);
+        kernel[22] = input.at<uint8>(y + 2, x);
+        kernel[23] = input.at<uint8>(y + 2, x + 1);
+        kernel[24] = input.at<uint8>(y + 2, x + 2);
+    }
+
+    uint8 eval_chromosome(Chromosome const& chromosome, uint8* inputs, uint32 const& numRows, uint32 const& numCols, uint32 const& numInputs)
+	{		
+        uint8* outputs;
+        if (numInputs == 9)
+        { 
+            outputs = (uint8*)malloc(CGP_PARAM_TOTAL_3X3);
+            memcpy(outputs, inputs, CGP_PARAM_INPUTS_3X3 * sizeof(uint8));
+        }        
+        else if (numInputs == 25)
+        {
+            outputs = (uint8*)malloc(CGP_PARAM_TOTAL_5X5);
+            memcpy(outputs, inputs, CGP_PARAM_INPUTS_5X5 * sizeof(uint8));
+        }
+		
 		
 		uint32 in1, in2, func;
 
@@ -132,35 +175,39 @@ namespace imcgp
                     case FUNC_SHL2: out = in1 << 2; break;
 					default: out = 255;
 				}
-				outputs[numRows * i + j + CGP_PARAM_INPUTS] = out;
+
+                if (numInputs == 9)                
+                    outputs[numRows * i + j + CGP_PARAM_INPUTS_3X3] = out;                
+                else if (numInputs == 25)
+                    outputs[numRows * i + j + CGP_PARAM_INPUTS_5X5] = out;				
 			}
 		}
 
 		return out;
 	}
 
-	void evolve_population(Population& population, std::vector<uint32>* possibleValues, uint32 const& bestFilter, uint32 const& numPopulation, uint32 const& numMutate, uint32 const& numRows, uint32 const& numCols)
+	void evolve_population(Population& population, std::vector<uint32>* possibleValues, uint32 const& bestFilter, uint32 const& numPopulation, uint32 const& numMutate, uint32 const& numRows, uint32 const& numCols, uint32 const& numInputs)
 	{
 		Chromosome parent = population[bestFilter];
 
 		population[0] = parent;
 		for (uint32 ch = 1; ch < numPopulation; ++ch)
 		{
-			population[ch] = mutate(parent, possibleValues, numMutate, CGP_PARAM_TOTAL, numRows, numCols);
+            population[ch] = mutate(parent, possibleValues, numMutate, CGP_CHROMOSOME_SIZE, numRows, numCols, numInputs);
 		}
 	}
 
-	void find_possible_col_values(std::vector<uint32>* table, uint32 const& numRows, uint32 const& numCols, uint32 const& lback)
+	void find_possible_col_values(std::vector<uint32>* table, uint32 const& numRows, uint32 const& numCols, uint32 const& lback, uint32 const& numInputs)
 	{
 		for (uint32 i = 0; i < numCols; ++i)
 		{
-			uint32 minidx = numRows * (i - lback) + CGP_PARAM_INPUTS;
-			if (minidx < CGP_PARAM_INPUTS)
-				minidx = CGP_PARAM_INPUTS;
+            uint32 minidx = numRows * (i - lback) + numInputs;
+            if (minidx < numInputs)
+                minidx = numInputs;
 
-			uint32 maxidx = i * numRows + CGP_PARAM_INPUTS;
+            uint32 maxidx = i * numRows + numInputs;
 
-			for (uint32 j = 0; j < CGP_PARAM_INPUTS; ++j)
+            for (uint32 j = 0; j < numInputs; ++j)
 				table[i].push_back(j);
 
 			for (uint32 j = minidx; j < maxidx; ++j)
@@ -184,7 +231,7 @@ namespace imcgp
 		#endif
 	}
 
-	void create_init_population(Population& population, std::vector<uint32>* possibleValues, uint32 const& maxPopulation, uint32 const& numRows, uint32 const& numCols)
+	void create_init_population(Population& population, std::vector<uint32>* possibleValues, uint32 const& maxPopulation, uint32 const& numRows, uint32 const& numCols, uint32 const& numInputs)
 	{
 		population.reserve(maxPopulation);
 		for (uint32 i = 0; i < maxPopulation; ++i)
@@ -202,7 +249,7 @@ namespace imcgp
 			}
 
 			for (uint32 output = 0; output < CGP_PARAM_OUTPUTS; ++output)
-				ch.val[j++] = rand() % (numRows * numCols + CGP_PARAM_INPUTS);
+                ch.val[j++] = rand() % (numRows * numCols + numInputs);
 
 			population[i] = ch;
 		}
@@ -227,7 +274,7 @@ namespace imcgp
 		#endif
 	}
 
-	Chromosome mutate(Chromosome parent, const std::vector<uint32>* possibleValues, const uint32 numBits, const uint32 chromosomeLength, const uint32 numRows, const uint32 numCols)
+	Chromosome mutate(Chromosome parent, const std::vector<uint32>* possibleValues, uint32 const& numBits, uint32 const& chromosomeLength, uint32 const& numRows, uint32 const& numCols, uint32 const& numInputs)
 	{
 		const uint32 numGenes = rand() % numBits + 1;
 		for (uint32 i = 0; i < numGenes; ++i)
@@ -247,7 +294,7 @@ namespace imcgp
 					parent.val[idx] = rand() % NUM_FUNCTIONS;				
 			}
 			else			
-				parent.val[idx] = rand() % (numCols * numRows + CGP_PARAM_INPUTS);			
+                parent.val[idx] = rand() % (numCols * numRows + numInputs);
 			
 		}
 		return parent;
@@ -257,7 +304,7 @@ namespace imcgp
 	// CGPWrapper
 	///////////////////////////////////////////////////////////////
 
-	bool CGPWrapper::run(FitnessMethod method, uint32 const& numRuns, uint32 const& numGenerations, uint32 const& numPopulation, uint32 const& numMutate)
+	bool CGPWrapper::run(FitnessMethod method, uint32 const& numRuns, uint32 const& numGenerations, uint32 const& numPopulation, uint32 const& numMutate, uint32 const& numInputs)
 	{
 		srand(time(NULL));
 
@@ -272,13 +319,28 @@ namespace imcgp
         if (_options & OPT_CUDA_ACCELERATION)
         {
             GPU_CHECK_ERROR(cudaMalloc((void**)&_cudaInputImage, _inputImage.rows * _inputImage.cols * sizeof(uint8)));
-            GPU_CHECK_ERROR(cudaMalloc((void**)&_cudaFilteredImage, _inputImage.rows * _inputImage.cols * sizeof(uint8)));
-            GPU_CHECK_ERROR(cudaMalloc((void**)&_cudaFitness, sizeof(float)));
+            GPU_CHECK_ERROR(cudaMalloc((void**)&_cudaFilteredImage, _inputImage.rows * _inputImage.cols * sizeof(uint8)));            
             GPU_CHECK_ERROR(cudaMemcpy(_cudaInputImage, _inputImage.data, _inputImage.cols * _inputImage.rows * sizeof(uint8), cudaMemcpyHostToDevice));
         }
 
 		std::vector<uint32> possibleValues[CGP_PARAM_COLS];
-		find_possible_col_values(possibleValues, CGP_PARAM_ROWS, CGP_PARAM_COLS, CGP_PARAM_LBACK);		
+        find_possible_col_values(possibleValues, CGP_PARAM_ROWS, CGP_PARAM_COLS, CGP_PARAM_LBACK, numInputs);
+
+        // in case we are using gpu acceleration
+        // decide which kernel to use
+        void(*filter_image_func)(const uint8*, uint8*, const Chromosome*, const uint32, const uint32);
+        if (_options & OPT_CUDA_ACCELERATION)
+        {
+            if (numInputs == 9)
+                filter_image_func = cuda::filter_image_3x3;
+            else if (numInputs == 25)
+                filter_image_func = cuda::filter_image_5x5;
+            else
+            {
+                std::cerr << "Wrong input parameter value." << std::endl;
+                return false;
+            }
+        }        
 
 		for (uint32 r = 0; r < numRuns; ++r)
 		{
@@ -305,7 +367,7 @@ namespace imcgp
 			// generate initial population					
 			auto timer_init_start = std::chrono::high_resolution_clock::now();
 			Population pop;
-			create_init_population(pop, possibleValues, numPopulation, CGP_PARAM_ROWS, CGP_PARAM_COLS);
+			create_init_population(pop, possibleValues, numPopulation, CGP_PARAM_ROWS, CGP_PARAM_COLS, numInputs);
             auto timer_init_end = std::chrono::high_resolution_clock::now();
 
             _stats.init_time = static_cast<double>(std::chrono::duration_cast<std::chrono::milliseconds>(timer_init_end - timer_init_start).count()) / 1000.0;
@@ -349,8 +411,8 @@ namespace imcgp
                     {
                         dim3 block(16, 16);
                         dim3 grid(64, 64);                        
-
-                        cuda::filter_image<<<grid, block>>>(_cudaInputImage, _cudaFilteredImage, &cuda_pop[ch], _inputImage.cols, _inputImage.rows);
+                        
+                        filter_image_func<<<grid, block>>>(_cudaInputImage, _cudaFilteredImage, &cuda_pop[ch], _inputImage.cols, _inputImage.rows);                      
 
                         GPU_CHECK_ERROR(cudaMemcpy(_filteredImage.data, _cudaFilteredImage, _filteredImage.cols * _filteredImage.rows * sizeof(uint8), cudaMemcpyDeviceToHost));
                     }
@@ -361,10 +423,23 @@ namespace imcgp
                             for (uint32 x = 1; x < _inputImage.cols - 1; ++x)
                             {
                                 // get image kernel and copy it to outputs
-                                uint8 kernel[9];
-                                get_3x3_kernel(kernel, _inputImage, x, y);
-
-                                _filteredImage.at<uint8>(y, x) = eval_chromosome(pop[ch], kernel, CGP_PARAM_ROWS, CGP_PARAM_COLS);
+                                if (numInputs == CGP_PARAM_INPUTS_3X3)
+                                {
+                                    uint8 kernel[CGP_PARAM_INPUTS_3X3];
+                                    get_3x3_kernel(kernel, _inputImage, x, y);
+                                    _filteredImage.at<uint8>(y, x) = eval_chromosome(pop[ch], kernel, CGP_PARAM_ROWS, CGP_PARAM_COLS, numInputs);
+                                }
+                                else if (numInputs == CGP_PARAM_INPUTS_5X5)
+                                {
+                                    uint8 kernel[CGP_PARAM_INPUTS_5X5];
+                                    get_3x3_kernel(kernel, _inputImage, x, y);
+                                    _filteredImage.at<uint8>(y, x) = eval_chromosome(pop[ch], kernel, CGP_PARAM_ROWS, CGP_PARAM_COLS, numInputs);
+                                }   
+                                else
+                                {
+                                    std::cerr << "Wrong input parameter value." << std::endl;
+                                    return false;
+                                }
                             }
                         }
                     }
@@ -418,7 +493,7 @@ namespace imcgp
                 }                
 
 				bestFilter = candidates[rand() % candidates.size()];
-				evolve_population(pop, possibleValues, bestFilter, numPopulation, numMutate, CGP_PARAM_ROWS, CGP_PARAM_COLS);			
+				evolve_population(pop, possibleValues, bestFilter, numPopulation, numMutate, CGP_PARAM_ROWS, CGP_PARAM_COLS, numInputs);			
 				                                
                 auto timer_gen_end = std::chrono::high_resolution_clock::now();
                 double gen_time = static_cast<double>(std::chrono::duration_cast<std::chrono::milliseconds>(timer_gen_end - timer_gen_start).count()) / 1000.0;
@@ -434,10 +509,13 @@ namespace imcgp
 
                 if (_options & OPT_OUTPUT_CSV)
                 {
-                    std::ofstream file;
-                    file.open(outCsvFilename, std::ios::out | std::ios::app);
-                    file << gen << ";" << fitness << std::endl;                    
-                    file.close();
+                    if (gen % 10 == 0)
+                    {
+                        std::ofstream file;
+                        file.open(outCsvFilename, std::ios::out | std::ios::app);
+                        file << gen << ";" << fitness << std::endl;
+                        file.close();
+                    }
                 }
 			}
 														                
@@ -446,6 +524,7 @@ namespace imcgp
 			_stats.best_filter = pop[0];
 			_stats.num_generations = numGenerations;
 			_stats.num_genes_mutated = numMutate;
+            _stats.num_inputs = numInputs;
 			_stats.population_size = numPopulation;
 			_stats.method = method;				            
 
@@ -459,8 +538,7 @@ namespace imcgp
         if (_options & OPT_CUDA_ACCELERATION)
         {
             GPU_CHECK_ERROR(cudaFree(_cudaInputImage));
-            GPU_CHECK_ERROR(cudaFree(_cudaFilteredImage));
-            GPU_CHECK_ERROR(cudaFree(_cudaFitness));
+            GPU_CHECK_ERROR(cudaFree(_cudaFilteredImage));            
         }
 
 		return true;
@@ -477,6 +555,9 @@ namespace imcgp
 		myfile << "Fitness method: ";
 		switch (_stats.method)
 		{
+            case MSE:
+                myfile << "MSE";
+                break;        
 			case PSNR:
 				myfile << "PSNR";
 				break;
@@ -500,6 +581,7 @@ namespace imcgp
 			}			
 		}
 		myfile << std::endl;
+        myfile << "Number of inputs: " << _stats.num_inputs << std::endl;
 		myfile << "Number of generations: " << _stats.num_generations << std::endl;
 		myfile << "Max. genes mutated: " << _stats.num_genes_mutated << std::endl;
 		myfile << "Population size: " << _stats.population_size << std::endl;		
