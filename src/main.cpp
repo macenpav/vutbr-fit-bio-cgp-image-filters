@@ -11,15 +11,15 @@ int main(int32 argc, char** argv)
 	for (int32 i = 1; i < argc; ++i)
 	{
 		// input image
-		if (std::string(argv[i]) == "-in" && i + 1 < argc) {
+        if ((std::string(argv[i]) == "-i" || std::string(argv[i]) == "--input") && i + 1 < argc) {
 			filename = argv[++i];
 		}
 
-		if (std::string(argv[i]) == "-ref" && i + 1 < argc) {
+        if ((std::string(argv[i]) == "-r" || std::string(argv[i]) == "--reference") && i + 1 < argc) {
 			refFilename = argv[++i];
 		}
 
-		if (std::string(argv[i]) == "-method" && i + 1 < argc) {
+        if ((std::string(argv[i]) == "-m" || std::string(argv[i]) == "--method") && i + 1 < argc) {
 			methodname = argv[++i];
 			if (methodname == "mdpp")
 				method = imcgp::MDPP;
@@ -27,40 +27,46 @@ int main(int32 argc, char** argv)
 				method = imcgp::PSNR;
 		}
 
-		if (std::string(argv[i]) == "-run" && i + 1 < argc) {
+        if ((std::string(argv[i]) == "-R" || std::string(argv[i]) == "--runs") && i + 1 < argc) {
 			numRuns = atoi(argv[++i]);
 		}
 
-		if (std::string(argv[i]) == "-mut" && i + 1 < argc) {
+        if ((std::string(argv[i]) == "-M" || std::string(argv[i]) == "--mutations") && i + 1 < argc) {
 			numMutations = atoi(argv[++i]);
 		}
 
-		if (std::string(argv[i]) == "-gen" && i + 1 < argc) {
+        if ((std::string(argv[i]) == "-g" || std::string(argv[i]) == "--generations") && i + 1 < argc) {
 			numGenerations = atoi(argv[++i]);
 		}
 
-		if (std::string(argv[i]) == "-pop" && i + 1 < argc) {
+        if ((std::string(argv[i]) == "-p" || std::string(argv[i]) == "--population") && i + 1 < argc) {
 			numPopulation = atoi(argv[++i]);
 		}
 
-		if (std::string(argv[i]) == "-v") {
+        if (std::string(argv[i]) == "-v" || std::string(argv[i]) == "--verbose") {
 			opts |= imcgp::OPT_VERBOSE;
 		}
 
-        if (std::string(argv[i]) == "-cuda") {
+        if (std::string(argv[i]) == "-C" || std::string(argv[i]) == "--cuda") {
             opts |= imcgp::OPT_CUDA_ACCELERATION;
         }
 
-        if (std::string(argv[i]) == "-csv") {
+        if (std::string(argv[i]) == "-c" || std::string(argv[i]) == "--csv") {
             opts |= imcgp::OPT_OUTPUT_CSV;
         }
 	}
 
 	if (filename.empty())
 	{
-		std::cerr << "Unspecified input." << std::endl;
+		std::cerr << "Unspecified input image." << std::endl;
 		return EXIT_FAILURE;
 	}
+
+    if (refFilename.empty())
+    {
+        std::cerr << "Unspecified reference image." << std::endl;
+        return EXIT_FAILURE;
+    }
 
 	imcgp::CGPWrapper cgp;
 
