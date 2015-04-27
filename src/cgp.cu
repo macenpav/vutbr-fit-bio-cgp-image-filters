@@ -47,8 +47,20 @@ namespace imcgp
 				fitness = 10.f * std::log10(255.f * 255.f / tmp);
 				break;
 			}
-			case SCORE:
-			// TODO: implement score and other methods
+            case MSE:
+            {
+                for (uint32 y = 1; y < input.rows - 1; ++y)
+                {
+                    for (uint32 x = 1; x < input.cols - 1; ++x)
+                    {
+                        float a = static_cast<float>(input.at<uint8>(y, x));
+                        float b = static_cast<float>(reference.at<uint8>(y, x));
+                        fitness += (a*a - b*b);
+                    }
+                }
+                fitness /= static_cast<float>((input.cols - 2) * (input.rows - 2));
+            }
+			
 			default:			
 				break;			
 		}
@@ -100,8 +112,7 @@ namespace imcgp
 					case FUNC_XOR: out = in1 ^ in2; break;
 					case FUNC_SHR1: out = in1 >> 1; break;
 					case FUNC_SHR2: out = in1 >> 2; break;
-					case FUNC_SWAP: out = ((in1 & 0x0F) << 4) | (in2 & 0x0F); break;
-					case FUNC_ADD_SATUR:
+					case FUNC_SWAP: out = ((in1 & 0x0F) << 4) | (in2 & 0x0F); break;					
 					case FUNC_ADD:
 					{
 						if (static_cast<uint32>(in1)+static_cast<uint32>(in2) > 255)
@@ -117,6 +128,8 @@ namespace imcgp
 					}
 					case FUNC_MAX: out = std::max(in1, in2); break;
 					case FUNC_MIN: out = std::min(in1, in2); break;
+                    case FUNC_SHL1: out = in1 << 1; break;
+                    case FUNC_SHL2: out = in1 << 2; break;
 					default: out = 255;
 				}
 				outputs[numRows * i + j + CGP_PARAM_INPUTS] = out;
@@ -252,7 +265,7 @@ namespace imcgp
 		{
 			std::cerr << "Input image and reference image dimensions are different." << std::endl;
 			return false;
-		}
+		}        
 
 		_filteredImage = cv::Mat(_inputImage.rows, _inputImage.cols, CV_8UC1);
         
@@ -269,28 +282,42 @@ namespace imcgp
 
 		for (uint32 r = 0; r < numRuns; ++r)
 		{
-			if (_options & OPT_MEASURE)
-			{
-				_stats.average_gen_time = 0.0;
-				_stats.total_time = 0.0;
-			}
+            std::time_t t = std::time(NULL);
+            auto now = std::time(nullptr);
+            auto tm = *std::localtime(&now);
+            std::stringstream ss;
+            ss << std::put_time(&tm, "%d-%m-%Y %H-%M-%S");
+            std::string date = ss.str();
 
+            std::string outStatsFilename = "stats (" + date + ").txt";
+            std::string outCsvFilename = "fitness (" + date + ").csv";
+
+            if (_options & OPT_OUTPUT_CSV)
+            {
+                std::ofstream file;
+                file.open(outCsvFilename, std::ios::out);
+                file << "generation;fitness" << std::endl;
+                file.close();
+            }
+
+			_stats.total_time = 0.0;
+	
 			// generate initial population					
-			auto t1 = std::chrono::high_resolution_clock::now();
+			auto timer_init_start = std::chrono::high_resolution_clock::now();
 			Population pop;
 			create_init_population(pop, possibleValues, numPopulation, CGP_PARAM_ROWS, CGP_PARAM_COLS);
-			auto t2 = std::chrono::high_resolution_clock::now();
+            auto timer_init_end = std::chrono::high_resolution_clock::now();
 
-			if (_options & OPT_VERBOSE)
-			{
-				std::chrono::duration<double> time = t2 - t1;
-				std::cout << "Timer init: " << time.count() << "s" << std::endl;
-			}
+            _stats.init_time = static_cast<double>(std::chrono::duration_cast<std::chrono::milliseconds>(timer_init_end - timer_init_start).count()) / 1000.0;
+
+			if (_options & OPT_VERBOSE)							
+                std::cout << "Initial population created in " << _stats.init_time << " ms" << std::endl;             
 
 			float fitness;
 			switch (method)
 			{
 				// max value
+                case MSE:
 				case MDPP:
 					fitness = std::numeric_limits<float>::max();
 					break;
@@ -301,17 +328,12 @@ namespace imcgp
 			}
 
 			for (uint32 gen = 0; gen < numGenerations; ++gen)
-			{
-				if (_options & OPT_VERBOSE)
-				{
-					std::cout << "Generation [" << gen << "]:" << std::endl;
-					std::cout << "----------------------------" << std::endl;
-				}
-				auto t3 = std::chrono::high_resolution_clock::now();
+			{			
+				auto timer_gen_start = std::chrono::high_resolution_clock::now();
 
 				int32 bestFilter = 0;
 				std::vector<uint32> candidates;		
-                Chromosome* cuda_pop;
+                Chromosome* cuda_pop;                
 
                 if (_options & OPT_CUDA_ACCELERATION)
                 {
@@ -347,31 +369,7 @@ namespace imcgp
                         }
                     }
 
-					// calculate fitness for the given filtered image
-                    float newFitness;
-                    /*if (_options & OPT_CUDA_ACCELERATION)
-                    {                                                 
-                        dim3 block(16, 16);
-                        dim3 grid(64, 64);
-
-                        float tmp = 0.f;
-                        cudaMemcpy(&tmp, _cudaFitness, sizeof(float), cudaMemcpyHostToDevice);                        
-                        cuda::calc_fitness_add<<<grid, block>>>(_cudaFitness, method, _cudaInputImage, _cudaFilteredImage, _inputImage.cols, _inputImage.rows);
-                        GPU_CHECK_ERROR(cudaMemcpy(&newFitness, _cudaFitness, sizeof(float), cudaMemcpyDeviceToHost));
-
-                        switch (method)
-                        {
-                            case MDPP:
-                                newFitness /= (static_cast<float>((_inputImage.cols - 2) * (_inputImage.rows - 2)));
-                                break;
-                            case PSNR:
-                                newFitness /= (static_cast<float>((_inputImage.cols - 2) * (_inputImage.rows - 2)));
-                                newFitness = 10.f * std::log10(255.f * 255.f / tmp);
-                                break;
-                        }
-                    }
-                    else                    */
-                        newFitness = calc_fitness(method, _filteredImage, _referenceImage);                    
+                    float newFitness = calc_fitness(method, _filteredImage, _referenceImage);                    
 					
 					if (newFitness == ERROR_FITNESS)
 					{
@@ -383,7 +381,8 @@ namespace imcgp
 					switch (method)
 					{
 						// min value
-						case MDPP:
+                        case MSE:
+						case MDPP: // mean difference per pixel
 						{
 							if (newFitness < fitness)
 							{
@@ -397,7 +396,7 @@ namespace imcgp
 							break;
 						}
 						// max value
-						case PSNR:
+						case PSNR: // peak signal-to-noise ration
 						{
 							if (newFitness > fitness)
 							{
@@ -409,71 +408,52 @@ namespace imcgp
 								candidates.push_back(ch);
 							
 							break;
-						}
-					}										
+						}                
+					}										                    
 				}
 
                 if (_options & OPT_CUDA_ACCELERATION)
                 {
                     cudaFree(cuda_pop);
-                }
+                }                
 
 				bestFilter = candidates[rand() % candidates.size()];
+				evolve_population(pop, possibleValues, bestFilter, numPopulation, numMutate, CGP_PARAM_ROWS, CGP_PARAM_COLS);			
+				                                
+                auto timer_gen_end = std::chrono::high_resolution_clock::now();
+                double gen_time = static_cast<double>(std::chrono::duration_cast<std::chrono::milliseconds>(timer_gen_end - timer_gen_start).count()) / 1000.0;
 
+                _stats.total_time += gen_time;
+                _stats.average_gen_time += gen_time;
+                
 				if (_options & OPT_VERBOSE)
-				{
-					std::cout << "fitness: " << fitness << std::endl;
-					std::cout << "candidates: ";
-					for (std::vector<uint32>::const_iterator it = candidates.begin(); it != candidates.end(); ++it)
-						std::cout << *it << " ";
-					std::cout << " (best: " << bestFilter << ")" << std::endl;
-				}
+				{					       
+                    std::cout << "Generation (" << gen << ") evaulated in " << gen_time << " ms" << std::endl;
+                    std::cout << "Current fitness: " << fitness << std::endl;
+				}		
 
-				evolve_population(pop, possibleValues, bestFilter, numPopulation, numMutate, CGP_PARAM_ROWS, CGP_PARAM_COLS);
-
-				auto t4 = std::chrono::high_resolution_clock::now();
-				std::chrono::duration<double> time = t4 - t3;
-				
-				if (_options & OPT_VERBOSE)
-				{					
-					std::cout << "Time: " << time.count() << "s" << std::endl;					
-					std::cout << "----------- END ------------" << std::endl;	
-				}
-
-				if (_options & OPT_MEASURE)				
-					_stats.average_gen_time += time.count();				
+                if (_options & OPT_OUTPUT_CSV)
+                {
+                    std::ofstream file;
+                    file.open(outCsvFilename, std::ios::out | std::ios::app);
+                    file << gen << ";" << fitness << std::endl;                    
+                    file.close();
+                }
 			}
-			auto t5 = std::chrono::high_resolution_clock::now();
-			std::chrono::duration<double> time = t5 - t1;
+														                
+			_stats.average_gen_time /= static_cast<double>(numGenerations);
+			_stats.fitness = fitness;
+			_stats.best_filter = pop[0];
+			_stats.num_generations = numGenerations;
+			_stats.num_genes_mutated = numMutate;
+			_stats.population_size = numPopulation;
+			_stats.method = method;				            
 
-			if (_options & OPT_VERBOSE)
-				std::cout << "Total time: " << time.count() << "s" << std::endl;
-
-			if (_options & OPT_MEASURE)
-			{	
-				
-				std::time_t t = std::time(NULL);
-				
-				_stats.total_time = time.count();
-				_stats.average_gen_time /= static_cast<double>(numGenerations);
-				_stats.fitness = fitness;
-				_stats.best_filter = pop[0];
-				_stats.num_generations = numGenerations;
-				_stats.num_genes_mutated = numMutate;
-				_stats.population_size = numPopulation;
-				_stats.method = method;
-				
-				auto now = std::time(nullptr);
-				auto tm = *std::localtime(&now);
-				std::stringstream ss;
-				ss << std::put_time(&tm, "%d-%m-%Y %H-%M-%S");
-				std::string date = ss.str();
-
-				write_stats("stats (" + date + ").txt");
-				save_image("filtered (" + date + ").jpg", FILTERED_IMAGE);
-				save_image("original (" + date + ").jpg", ORIGINAL_IMAGE);
-				save_image("reference (" + date + ").jpg", REFERENCE_IMAGE);
-			}			
+			write_stats(outStatsFilename);
+			save_image("filtered (" + date + ").jpg", FILTERED_IMAGE);
+			save_image("original (" + date + ").jpg", ORIGINAL_IMAGE);
+			save_image("reference (" + date + ").jpg", REFERENCE_IMAGE);
+						
 		}
 
         if (_options & OPT_CUDA_ACCELERATION)
@@ -491,6 +471,7 @@ namespace imcgp
 		std::ofstream myfile;
 		myfile.open(filename);
 
+        myfile << "Init time: " << _stats.init_time << std::endl;
 		myfile << "Total time: " << _stats.total_time << std::endl;
 		myfile << "Average gen. time: " << _stats.average_gen_time << std::endl;
 		myfile << "Fitness method: ";
@@ -521,8 +502,7 @@ namespace imcgp
 		myfile << std::endl;
 		myfile << "Number of generations: " << _stats.num_generations << std::endl;
 		myfile << "Max. genes mutated: " << _stats.num_genes_mutated << std::endl;
-		myfile << "Population size: " << _stats.population_size << std::endl;
-		
+		myfile << "Population size: " << _stats.population_size << std::endl;		
 
 		myfile.close();
 	}

@@ -2,6 +2,7 @@
 #define H_CGP_ENUMS
 
 #include <vector>
+#include <chrono>
 
 ///////////////////////////////////////////////////////////////
 // Typedefs
@@ -14,6 +15,8 @@ typedef unsigned int uint32;
 typedef char int8;
 typedef short int16;
 typedef int int32;
+
+typedef std::chrono::duration<double, std::ratio<1, 1000000000>> Ticks;
 
 ///////////////////////////////////////////////////////////////
 // Defines
@@ -48,7 +51,8 @@ namespace imcgp
     {
         OPT_VERBOSE             = 0x00000001,
         OPT_MEASURE             = 0x00000002,
-        OPT_CUDA_ACCELERATION   = 0x00000004
+        OPT_CUDA_ACCELERATION   = 0x00000004,
+        OPT_OUTPUT_CSV          = 0x00000008
     };
 
     enum Function
@@ -63,11 +67,12 @@ namespace imcgp
         FUNC_SHR1,		///< in1 >> 1
         FUNC_SHR2,		///< in1 >> 2
         FUNC_SWAP,		///< in2
-        FUNC_ADD,		///< max(in1 + in2, 255)
-        FUNC_ADD_SATUR, ///< ???
+        FUNC_ADD,		///< max(in1 + in2, 255)        
         FUNC_AVERAGE,	///< (in1 + in2) >> 1
         FUNC_MAX,		///< max(in1, in2)
         FUNC_MIN,		///< min(in1, in2)
+        FUNC_SHL1,		///< in1 << 1
+        FUNC_SHL2,		///< in1 << 2
 
         NUM_FUNCTIONS	///< total number of functions
     };
@@ -103,7 +108,7 @@ namespace imcgp
     {
         MDPP,	///< Mean difference per pixel
         PSNR,	///< Peak signal-to-noise ratio
-        SCORE,
+        MSE,    ///< Mean square error
 
         NUM_FITNESS_METHODS
     };
@@ -112,7 +117,7 @@ namespace imcgp
     {
         Chromosome best_filter;
         float fitness;
-        double total_time, average_gen_time;
+        double total_time, average_gen_time, init_time;
         Population initial_population;
         uint32 num_generations, num_genes_mutated, population_size;
         FitnessMethod method;

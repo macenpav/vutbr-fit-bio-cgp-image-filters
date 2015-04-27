@@ -4,40 +4,7 @@
 namespace imcgp
 {
     namespace cuda
-    {
-        __global__ void calc_fitness_add(float* fitness, FitnessMethod method, uint8* input, uint8* reference, const uint32 width, const uint32 height)
-        {
-            const uint32 x = blockIdx.x * blockDim.x + threadIdx.x;
-            const uint32 y = blockIdx.y * blockDim.y + threadIdx.y;
-            const uint32 idx = y * width + x;            
-                
-            // fitness must be 0
-
-            if (x < width && y < height)
-            {
-                printf("%i", *fitness);
-                switch (method)
-                {
-                    case MDPP:
-                    {                        
-                        *fitness += fabsf(static_cast<float>(input[idx]) - static_cast<float>(reference[idx]));
-                        break;
-                    }
-                    case PSNR:
-                    {
-                        float tmp = static_cast<float>(input[idx]) - static_cast<float>(reference[idx]);
-                        *fitness += (tmp * tmp);
-                        break;
-                    }
-
-                    case SCORE:
-                        // TODO: implement score and other methods
-                    default:
-                        break;
-                }
-            }
-        }
-
+    {        
         __device__ void get_3x3_kernel(uint32 const& x, uint32 const& y, uint8* kernel, const uint8* input, uint32 const& pitch)
         {
             const uint32 idx = y * pitch + x;
@@ -100,8 +67,7 @@ namespace imcgp
                         case FUNC_XOR: out = in1 ^ in2; break;
                         case FUNC_SHR1: out = in1 >> 1; break;
                         case FUNC_SHR2: out = in1 >> 2; break;
-                        case FUNC_SWAP: out = ((in1 & 0x0F) << 4) | (in2 & 0x0F); break;
-                        case FUNC_ADD_SATUR:
+                        case FUNC_SWAP: out = ((in1 & 0x0F) << 4) | (in2 & 0x0F); break;                        
                         case FUNC_ADD:
                         {
                             if (static_cast<uint32>(in1)+static_cast<uint32>(in2) > 255)
@@ -133,6 +99,9 @@ namespace imcgp
 
                             break;
                         }
+                        case FUNC_SHL1: out = in1 << 1; break;
+                        case FUNC_SHL2: out = in1 << 2; break;
+
                         default: out = 255;
                     }
                     outputs[numRows * i + j + CGP_PARAM_INPUTS] = out;

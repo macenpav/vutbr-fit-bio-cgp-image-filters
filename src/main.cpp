@@ -47,12 +47,12 @@ int main(int32 argc, char** argv)
 			opts |= imcgp::OPT_VERBOSE;
 		}
 
-		if (std::string(argv[i]) == "-m") {
-			opts |= imcgp::OPT_MEASURE;
-		}
-
         if (std::string(argv[i]) == "-cuda") {
             opts |= imcgp::OPT_CUDA_ACCELERATION;
+        }
+
+        if (std::string(argv[i]) == "-csv") {
+            opts |= imcgp::OPT_OUTPUT_CSV;
         }
 	}
 
@@ -67,16 +67,13 @@ int main(int32 argc, char** argv)
 	cgp.set_options(opts);
 
 	if (cgp.load_image(filename, imcgp::ORIGINAL_IMAGE) && cgp.load_image(refFilename, imcgp::REFERENCE_IMAGE))
-	{		
-		cgp.run(imcgp::MDPP, 3, 30000, 5, 5);
-		cgp.run(imcgp::PSNR, 3, 30000, 5, 5);	
-
-		/*bool result = cgp.run(method, numRuns, numGenerations, numPopulation, numMutations);
+	{				
+		bool result = cgp.run(method, numRuns, numGenerations, numPopulation, numMutations);
 		if (!result)
 		{
 			std::cerr << "Error occured while running evolution." << std::endl;
 			return EXIT_FAILURE;
-		}	*/	
+		}
 	}
 	else
 	{

@@ -14,15 +14,14 @@
 #include "cuda_runtime.h"
 #include "cgp_enums.h"
 
-#define DEBUG ///< debug mode
+// #define DEBUG ///< debug mode
 
 #define GPU_CHECK_ERROR(ans) { gpuAssert((ans), __FILE__, __LINE__); }
 inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort = true)
 {
     if (code != cudaSuccess)
     {
-        std::cerr << "GPU assert: " << cudaGetErrorString(code) << " " << file << " " << line << std::endl;
-        system("pause");
+        std::cerr << "GPU assert: " << cudaGetErrorString(code) << " " << file << " " << line << std::endl;        
         if (abort) exit(code);
     }
 }
