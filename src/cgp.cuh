@@ -47,9 +47,10 @@ namespace imcgp
 	 * @param method Fitness method used.
 	 * @param input Input image.
 	 * @param reference Reference image to compare input to.
+     * @param offset Offset from the side of the image.
 	 * @return Fitness value.
 	 */
-	float calc_fitness(FitnessMethod method, cv::Mat const& input, cv::Mat const& reference);
+	float calc_fitness(FitnessMethod method, cv::Mat const& input, cv::Mat const& reference, const uint32 offset);
 
 	/** @brief Fills an array with an image kernel. 
 	 *
@@ -196,6 +197,10 @@ namespace imcgp
 
             /** @brief Run statistics */
 			Statistics _stats;
+
+            std::string _inputImageFilename;
+
+            std::string _refImageFilename;
 	};
 
 }

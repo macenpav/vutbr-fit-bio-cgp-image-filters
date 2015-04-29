@@ -133,6 +133,8 @@ namespace imcgp
     /** @brief A structure to simplify saving run stats. */
     struct Statistics
     {
+        std::string input_file;
+        std::string reference_file;
         Chromosome best_filter;
         float fitness;
         double total_time, average_gen_time, init_time;

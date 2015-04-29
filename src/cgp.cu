@@ -10,7 +10,7 @@
 
 namespace imcgp
 { 
-	float calc_fitness(FitnessMethod method, cv::Mat const& input, cv::Mat const& reference)
+	float calc_fitness(FitnessMethod method, cv::Mat const& input, cv::Mat const& reference, const uint32 offset = 1)
 	{
 		if (input.rows != reference.rows || input.cols != reference.cols)
 		{
@@ -18,47 +18,48 @@ namespace imcgp
 			return ERROR_FITNESS;
 		}
 
-		float fitness = ERROR_FITNESS;
+		float fitness = ERROR_FITNESS;        
 		switch (method)
 		{
 			case MDPP:
 			{
 				fitness = 0.f;
-				for (uint32 y = 1; y < input.rows-1; ++y)
+                for (uint32 y = offset; y < input.rows - offset; ++y)
 				{
-					for (uint32 x = 1; x < input.cols-1; ++x)
+                    for (uint32 x = offset; x < input.cols - offset; ++x)
 						fitness += std::abs(static_cast<float>(input.at<uint8>(y, x)) - static_cast<float>(reference.at<uint8>(y, x)));
 				}
-				fitness /= static_cast<float>((input.cols-2) * (input.rows-2));
+                fitness /= static_cast<float>((input.cols - 2 * offset) * (input.rows - 2 * offset));
 				break;
 			}
 			case PSNR:
 			{
 				float tmp = 0.f;
-				for (uint32 y = 1; y < input.rows-1; ++y)
+                for (uint32 y = offset; y < input.rows - offset; ++y)
 				{
-					for (uint32 x = 1; x < input.cols-1; ++x)
+                    for (uint32 x = offset; x < input.cols - offset; ++x)
 					{
 						float a = static_cast<float>(input.at<uint8>(y, x)) - static_cast<float>(reference.at<uint8>(y, x));
 						tmp += (a * a);
 					}
 				}
-				tmp /= ((input.cols-2) * (input.rows-2));
+                tmp /= ((input.cols - 2 * offset) * (input.rows - 2 * offset));
 				fitness = 10.f * std::log10(255.f * 255.f / tmp);
 				break;
 			}
             case MSE:
             {
-                for (uint32 y = 1; y < input.rows - 1; ++y)
+                fitness = 0.f;
+                for (uint32 y = offset; y < input.rows - offset; ++y)
                 {
-                    for (uint32 x = 1; x < input.cols - 1; ++x)
+                    for (uint32 x = offset; x < input.cols - offset; ++x)
                     {
-                        float a = static_cast<float>(input.at<uint8>(y, x));
-                        float b = static_cast<float>(reference.at<uint8>(y, x));
-                        fitness += (a*a - b*b);
+                        float tmp = static_cast<float>(input.at<uint8>(y, x)) - static_cast<float>(reference.at<uint8>(y, x));
+                        fitness += tmp * tmp;
                     }
                 }
-                fitness /= static_cast<float>((input.cols - 2) * (input.rows - 2));
+                fitness /= static_cast<float>((input.cols - 2 * offset) * (input.rows - 2 * offset));
+                break;
             }
 			
 			default:			
@@ -312,7 +313,13 @@ namespace imcgp
 		{
 			std::cerr << "Input image and reference image dimensions are different." << std::endl;
 			return false;
-		}        
+		}      
+
+        if (numInputs != 9 && numInputs != 25)
+        {            
+            std::cerr << "The number of inputs " << std::endl;
+            return false;
+        }
 
 		_filteredImage = cv::Mat(_inputImage.rows, _inputImage.cols, CV_8UC1);
         
@@ -444,7 +451,7 @@ namespace imcgp
                         }
                     }
 
-                    float newFitness = calc_fitness(method, _filteredImage, _referenceImage);                    
+                    float newFitness = calc_fitness(method, _filteredImage, _referenceImage, numInputs == 9 ? 1 : 2);                    
 					
 					if (newFitness == ERROR_FITNESS)
 					{
@@ -526,7 +533,9 @@ namespace imcgp
 			_stats.num_genes_mutated = numMutate;
             _stats.num_inputs = numInputs;
 			_stats.population_size = numPopulation;
-			_stats.method = method;				            
+			_stats.method = method;			
+            _stats.input_file = _inputImageFilename;
+            _stats.reference_file = _refImageFilename;
 
 			write_stats(outStatsFilename);
 			save_image("filtered (" + date + ").jpg", FILTERED_IMAGE);
@@ -549,6 +558,8 @@ namespace imcgp
 		std::ofstream myfile;
 		myfile.open(filename);
 
+        myfile << "Input image: " << _stats.input_file << std::endl;
+        myfile << "Reference image: " << _stats.reference_file << std::endl;
         myfile << "Init time: " << _stats.init_time << std::endl;
 		myfile << "Total time: " << _stats.total_time << std::endl;
 		myfile << "Average gen. time: " << _stats.average_gen_time << std::endl;
@@ -598,6 +609,7 @@ namespace imcgp
 				_referenceImage = cv::imread(filename, CV_LOAD_IMAGE_GRAYSCALE);
 				if (!_inputImage.data)
 					return false;
+                _refImageFilename = filename;
 				break;
 			}
 			case ORIGINAL_IMAGE:
@@ -605,12 +617,12 @@ namespace imcgp
 				_inputImage = cv::imread(filename, CV_LOAD_IMAGE_GRAYSCALE);
 				if (!_inputImage.data)
 					return false;
+                _inputImageFilename = filename;
 				break;
 			}
 			default:
 				break;
-		}
-		
+		}		        
 
 		return true;
 	}
